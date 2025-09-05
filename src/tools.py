@@ -3,7 +3,11 @@ import os
 
 import requests
 from dotenv import load_dotenv
+from langchain_core.tools import tool
+from langchain_tavily import TavilySearch
+from langgraph.types import interrupt
 
+# Env vars
 load_dotenv()
 
 HASHNODE_API_ENDPOINT = os.getenv(
@@ -12,6 +16,8 @@ HASHNODE_API_KEY = os.getenv("HASHNODE_API_KEY")
 HASHNODE_PUBLICATION_ID = os.getenv("HASHNODE_PUBLICATION_ID")
 
 
+# TOOLS
+@tool
 def publish_article(title, content_markdown, tags=None):
     """
     Publishes an article to Hashnode.
@@ -67,3 +73,17 @@ def publish_article(title, content_markdown, tags=None):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return None
+
+
+@tool
+def human_assistance(query: str) -> str:
+    """Request assistance from a human."""
+    human_response = interrupt(
+        {"query": query})  # This saves the state in DB and kills the graph
+    return human_response["data"]
+
+
+search_tool = TavilySearch(max_results=5, topic="general")
+
+# List of all tools
+tools = [publish_article, human_assistance, search_tool]

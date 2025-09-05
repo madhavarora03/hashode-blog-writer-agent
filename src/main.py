@@ -1,20 +1,31 @@
+from typing import cast
+
+from langchain_core.runnables.config import RunnableConfig
+from langgraph.checkpoint.mongodb import MongoDBSaver
 from rich.console import Console
 
-from publish import publish_article
+from graph import State, create_chat_graph
+from prompt import SYSTEM_PROMPT
 
 console = Console()
 
 if __name__ == "__main__":
-    user_input = console.input(
-        "What is [i]your[/i] [bold red]name[/]? :smiley: ")
-    title = f"Hello from {user_input}"
-    content = f"""
-    This is a test article written by {user_input} using the
-    Hashnode Blog Writer Agent.
-    """
-    published_post = publish_article(title, content, tags=["test", "api"])
-    if published_post:
-        console.print(
-            f"Published post URL: [bold blue]{published_post['url']}[/]")
-    else:
-        console.print("[bold red]Failed to publish the article.[/]")
+    DB_URI = "mongodb://admin:admin@mongodb:27017"
+    config = {"configurable": {"thread_id": "1024"}}
+
+    with MongoDBSaver.from_conn_string(DB_URI) as checkpointer:
+        graph = create_chat_graph(checkpointer)
+
+        while True:
+            user_input = console.input("> ")
+            state = State(
+                messages=[{"role": "system", "content": SYSTEM_PROMPT},
+                          {"role": "user", "content": user_input}]
+            )
+            for event in graph.stream(
+                state,
+                config=cast(RunnableConfig, config),
+                stream_mode="values"
+            ):
+                if "messages" in event:
+                    event["messages"][-1].pretty_print()
